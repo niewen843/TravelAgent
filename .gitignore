@@ -1,0 +1,22 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Maven
+backend/target/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
