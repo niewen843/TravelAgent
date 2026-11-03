@@ -1,3 +1,95 @@
+# 主配置：与部署环境无关的默认行为。
+# ${NAME:default} 会从 Spring 配置源读取 NAME；冒号后的内容为没有配置时的默认值。
+# 本地默认启用 local，读取 application-local.yaml 中导入的项目 .env/.env.local。
+# 部署时可用系统环境变量覆盖，例如 MYSQL_HOST；生产设置 SPRING_PROFILES_ACTIVE=prod。
 spring:
   application:
-    name: backend
+    # 应用名称，供日志和框架识别，不是数据库名称。
+    name: travel-agent-backend
+  profiles:
+    # IDE、Maven 默认使用本地配置；显式指定 prod/test 时不再启用 local。
+    default: local
+  datasource:
+    # 库名需先手工创建；UTC 连接时区保证审计/登录时间采用同一时间基准。
+    # MYSQL_HOST/PORT/DATABASE 本地来自根目录 .env，未填写时采用这里的默认值。
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:travel_agent}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+    # 数据库业务账号，不应使用 root；密码从私有 .env 或部署环境读取。
+    username: ${MYSQL_USER:travel_agent}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      # 明确禁止 Spring 自动执行 schema.sql/data.sql，建表交由手工 MySQL 脚本。
+      mode: never
+  data:
+    redis:
+      # Redis 存登录会话及限流计数。Compose 本地映射端口默认为 6379。
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # 与 Compose 中 redis-server --requirepass 的 REDIS_PASSWORD 一致。
+      password: ${REDIS_PASSWORD:}
+  session:
+    # 空闲 24 小时失效；有请求会更新空闲期限，绝对期限由 travel.security 控制。
+    timeout: 24h
+    data:
+      redis:
+        # 同一 Redis 上隔离其他应用的会话键；测试使用自己的命名空间。
+        namespace: travel:session
+        # indexed 支持按用户 ID 查找并撤销所有设备会话，不能改为 default 后仍期待该功能。
+        repository-type: indexed
+
+mybatis-plus:
+  # 业务 SQL 位于 Mapper XML；classpath* 支持读取依赖/测试 classpath 下的同路径资源。
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.niewen.travelagent.entity
+  configuration:
+    # 支持 normalized_username -> normalizedUsername 等字段映射；关键 VO 另有显式 resultMap。
+    map-underscore-to-camel-case: true
+    # 身份状态须读取最新数据库值，不开启二级缓存；同一 SqlSession 也不复用语句结果缓存。
+    cache-enabled: false
+    local-cache-scope: statement
+    # 不打印带密码哈希等参数的 SQL。调试时不要在共享日志环境打开 SQL 参数输出。
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    # 关闭 MyBatis-Plus 启动横幅，减少启动日志噪声。
+    banner: false
+
+server:
+  # 前端 Vite 的 /api 默认代理到此端口。
+  port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      cookie:
+        # 本地 HTTP 使用普通名称；生产 profile 覆盖为 __Host- 前缀并启用 Secure。
+        name: travel-session
+        # JavaScript 无法读取会话 Cookie，前端不保存 Session ID。
+        http-only: true
+        # 浏览器跨站请求时限制携带 Cookie，仍须保留服务端 CSRF 检查。
+        same-site: lax
+        # Cookie 覆盖整个站点，不设置 Domain；生产 __Host- 名称也要求此路径。
+        path: /
+
+travel:
+  security:
+    # 登录后最多 7 天，普通请求、重连等都不能延长该绝对期限。
+    absolute-session-timeout: 7d
+    # BCrypt 成本，增加 1 大致倍增计算开销，生产先压测再调整。
+    bcrypt-strength: 12
+    # Redis 限流键前缀。与 Session 命名空间不同，测试可以独立覆盖。
+    rate-limit-namespace: travel:auth-limit
+    # 900 秒 = 15 分钟；窗口内统计全部尝试，包括成功登录。
+    rate-limit-window-seconds: 900
+    login-account-limit: 10 # 同一规范化用户名最多尝试 10 次。
+    login-ip-limit: 30      # 同一来源 IP 最多尝试登录 30 次。
+    # 临时密码从重置时起 30 分钟到期，必须在期限内完成改密，不随登录延长。
+    temporary-password-lifetime: 30m
+    # 每个管理员每 15 分钟最多提交 5 次重置，包含验证密码失败的尝试。
+    admin-reset-limit: 5
+    register-ip-limit: 5    # 同一来源 IP 最多尝试注册 5 次。
+  admin:
+    bootstrap:
+      # 默认不运行初始化，仅首次部署设置 ADMIN_BOOTSTRAP_ENABLED=true。
+      enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
+      # 本地来自 .env.local，生产来自部署环境；只用于初始化，不决定已存账号的权限。
+      username: ${ADMIN_USERNAME:}
+      password: ${ADMIN_PASSWORD:}

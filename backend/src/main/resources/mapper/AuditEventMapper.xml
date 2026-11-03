@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.niewen.travelagent.mapper.AuditEventMapper">
+    <resultMap id="AuditView" type="com.niewen.travelagent.vo.AuditEventVO">
+        <constructor>
+            <idArg column="id" name="id" javaType="_long"/>
+            <arg column="actor_user_id" name="actorUserId" javaType="java.lang.Long"/>
+            <arg column="target_user_id" name="targetUserId" javaType="java.lang.Long"/>
+            <arg column="action" name="action" javaType="String"/>
+            <arg column="result" name="result" javaType="String"/>
+            <arg column="trace_id" name="traceId" javaType="String"/>
+            <arg column="created_at" name="createdAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+    <!-- 不接收请求体的任意字段；服务端组装 actor、target、action 和 trace 后再写入。 -->
+    <insert id="appendEvent" parameterType="com.niewen.travelagent.entity.AuditEvent"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_event (actor_user_id, target_user_id, action, result, trace_id)
+        VALUES (#{actorUserId}, #{targetUserId}, #{action}, #{result}, #{traceId})
+    </insert>
+    <select id="listEvents" resultMap="AuditView">
+        SELECT id, actor_user_id, target_user_id, action, result, trace_id, created_at
+        FROM audit_event WHERE id &lt; #{beforeId}
+        <!-- target 为空表示管理端查看全局记录，普通用户不会调用此查询。 -->
+        <if test="target != null">AND target_user_id = #{target}</if>
+        ORDER BY id DESC LIMIT #{limit}
+    </select>
+</mapper>

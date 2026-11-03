@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.niewen.travelagent.mapper.AppUserMapper">
+    <!-- 完整实体用于内部认证。显式映射 normalized_username，避免把它误映射为 VO 的 username。 -->
+    <resultMap id="UserEntity" type="com.niewen.travelagent.entity.AppUser">
+        <id column="id" property="id"/>
+        <result column="normalized_username" property="normalizedUsername"/>
+        <result column="nickname" property="nickname"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="role" property="role"/>
+        <result column="status" property="status"/>
+        <result column="auth_version" property="authVersion"/>
+        <result column="must_change_password" property="mustChangePassword"/>
+        <result column="password_changed_at" property="passwordChangedAt"/>
+        <result column="last_login_at" property="lastLoginAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- record 使用构造器映射；只包含公开字段，SQL 本身也不查密码哈希。 -->
+    <resultMap id="UserView" type="com.niewen.travelagent.vo.UserVO">
+        <constructor>
+            <idArg column="id" name="id" javaType="_long"/>
+            <arg column="normalized_username" name="username" javaType="String"/>
+            <arg column="nickname" name="nickname" javaType="String"/>
+            <arg column="role" name="role" javaType="String"/>
+            <arg column="status" name="status" javaType="String"/>
+            <arg column="must_change_password" name="mustChangePassword" javaType="_boolean"/>
+            <arg column="created_at" name="createdAt" javaType="java.time.LocalDateTime"/>
+            <arg column="last_login_at" name="lastLoginAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="AccountColumns">
+        id, normalized_username, nickname, password_hash, role, status, auth_version,
+        must_change_password, password_changed_at, last_login_at, created_at, updated_at
+    </sql>
+
+    <select id="findByUsername" resultMap="UserEntity">
+        SELECT <include refid="AccountColumns"/> FROM app_user WHERE normalized_username = #{username}
+    </select>
+    <select id="findById" resultMap="UserEntity">
+        SELECT <include refid="AccountColumns"/> FROM app_user WHERE id = #{id}
+    </select>
+
+    <!-- 主键回填后服务再查询数据库默认字段，避免在 Java 中复制数据库的时间/版本默认规则。 -->
+    <insert id="insertAccount" parameterType="com.niewen.travelagent.entity.AppUser"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO app_user (normalized_username, nickname, password_hash, role, must_change_password)
+        VALUES (#{normalizedUsername}, #{nickname}, #{passwordHash}, #{role}, #{mustChangePassword})
+    </insert>
+    <update id="updateLastLogin">
+        UPDATE app_user SET last_login_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <!-- 一次原子更新完成改密和版本递增；不能删除 WHERE 中的版本和状态条件。 -->
+    <update id="updatePasswordIfVersion">
+        UPDATE app_user
+        SET password_hash = #{hash}, auth_version = auth_version + 1,
+            must_change_password = FALSE, password_changed_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND auth_version = #{version} AND status = 'ACTIVE'
+    </update>
+    <select id="findByIdForUpdate" resultMap="UserEntity">
+        SELECT <include refid="AccountColumns"/> FROM app_user WHERE id = #{id} FOR UPDATE
+    </select>
+    <!-- 重置与正常改密的差别：强制改密标记设为 TRUE，password_changed_at 作为临时密码起始时间。 -->
+    <update id="resetPasswordIfVersion">
+        UPDATE app_user
+        SET password_hash = #{hash}, auth_version = auth_version + 1,
+            must_change_password = TRUE, password_changed_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND auth_version = #{version} AND role = 'USER' AND status = 'ACTIVE'
+    </update>
+    <select id="listUserViews" resultMap="UserView">
+        SELECT id, normalized_username, nickname, role, status, must_change_password, created_at, last_login_at
+        FROM app_user WHERE id &gt; #{afterId} ORDER BY id LIMIT #{limit}
+    </select>
+</mapper>

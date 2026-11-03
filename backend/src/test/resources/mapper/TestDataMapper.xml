@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.niewen.travelagent.mapper.TestDataMapper">
+    <!-- 仅测试用，生产构建不会包含此 XML；删除操作严格限定测试自己创建的 ID 或 trace。 -->
+    <delete id="deleteUser">DELETE FROM app_user WHERE id = #{id}</delete>
+    <delete id="removeAuditForUser">DELETE FROM audit_event WHERE actor_user_id = #{id} OR target_user_id = #{id}</delete>
+    <delete id="removeAuditByTrace">DELETE FROM audit_event WHERE trace_id = #{trace}</delete>
+    <select id="countAdminUserViews" resultType="int">
+        SELECT COUNT(*) FROM audit_event WHERE actor_user_id = #{actor} AND target_user_id = #{target}
+        AND action = 'ADMIN_VIEW_USER'
+    </select>
+    <!-- 直接修改版本/状态用于模拟运维或另一个设备改密，验证旧 Session 的确失效。 -->
+    <update id="setUserRole">UPDATE app_user SET role = #{value} WHERE id = #{id}</update>
+    <update id="setUserStatus">UPDATE app_user SET status = #{value} WHERE id = #{id}</update>
+    <update id="setUserVersion">UPDATE app_user SET auth_version = #{value} WHERE id = #{id}</update>
+    <update id="setMustChangePassword">UPDATE app_user SET must_change_password = #{value} WHERE id = #{id}</update>
+    <update id="expireTemporaryPassword">
+        UPDATE app_user SET password_changed_at = UTC_TIMESTAMP(6) - INTERVAL 1 DAY WHERE id = #{id}
+    </update>
+    <update id="setPasswordHash">UPDATE app_user SET password_hash = #{value} WHERE id = #{id}</update>
+    <!-- 无效引用、非法枚举和 JSON 反例用于验证手工建表脚本的数据库约束。 -->
+    <update id="setAuditActor">UPDATE audit_event SET actor_user_id = #{id} WHERE trace_id = #{trace}</update>
+    <update id="setAuditTarget">UPDATE audit_event SET target_user_id = #{id} WHERE trace_id = #{trace}</update>
+    <update id="setAuditResult">UPDATE audit_event SET result = #{value} WHERE trace_id = #{trace}</update>
+    <update id="setAuditResourceType">UPDATE audit_event SET resource_type = #{value} WHERE trace_id = #{trace}</update>
+    <update id="setAuditMetadata">UPDATE audit_event SET metadata_json = #{value} WHERE trace_id = #{trace}</update>
+    <select id="findAuditByTrace" resultMap="com.niewen.travelagent.mapper.AuditEventMapper.AuditView">
+        SELECT id, actor_user_id, target_user_id, action, result, trace_id, created_at
+        FROM audit_event WHERE trace_id = #{trace}
+    </select>
+</mapper>

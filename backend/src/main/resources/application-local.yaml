@@ -1,0 +1,12 @@
+# 本地开发配置，默认 profile=local 时自动加载。
+# Spring 的 .properties 提示让根目录 .env 按 KEY=VALUE 读取；不需要先 source 才能启动后端。
+# IDEA 从仓库根目录启动时命中 ./，Maven 从 backend 启动时命中 ../。
+# optional 表示文件不存在时跳过；真实密码不写入此文件，缺失时数据库/Redis 认证会失败。
+spring:
+  config:
+    import:
+      - optional:file:./.env[.properties]
+      - optional:file:../.env[.properties]
+      # .env.local 保存本机私有覆盖与初始管理员凭证，已被 Git 忽略。
+      - optional:file:./.env.local[.properties]
+      - optional:file:../.env.local[.properties]

@@ -1,0 +1,10 @@
+# 生产使用 SPRING_PROFILES_ACTIVE=prod；不会加载 application-local.yaml 中的本地密码文件。
+# MYSQL_*、REDIS_* 等由容器/部署系统注入。站点必须使用 HTTPS 与同源 /api 代理。
+server:
+  servlet:
+    session:
+      cookie:
+        # __Host- 要求 Secure、Path=/、无 Domain，减少子域覆盖会话 Cookie 的风险。
+        name: __Host-travel-session
+        # 仅通过 HTTPS 发送；不要在本地 HTTP 调试时启用 prod profile。
+        secure: true
